@@ -1,86 +1,52 @@
 const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
-const cors = require("cors");
-
 const app = express();
-app.use(cors());
+const server = require("http").createServer(app);
+const io = require("socket.io")(server);
 
-const server = http.createServer(app);
-
-const io = new Server(server, {
-    cors: {
-        origin: "*",
-    }
-});
-
-const PORT = 3000;
+app.use(express.static(__dirname));
 
 let waitingUser = null;
-let activeChats = {};
 
 io.on("connection", (socket) => {
 
     console.log("User connected:", socket.id);
 
-    socket.on("start", () => {
+    if (waitingUser) {
+        // Match two users
+        socket.partner = waitingUser;
+        waitingUser.partner = socket;
 
-        if (waitingUser && waitingUser !== socket.id) {
+        socket.emit("message", "Stranger connected");
+        waitingUser.emit("message", "Stranger connected");
 
-            activeChats[socket.id] = waitingUser;
-            activeChats[waitingUser] = socket.id;
-
-            io.to(socket.id).emit("matched");
-            io.to(waitingUser).emit("matched");
-
-            waitingUser = null;
-
-        } else {
-
-            waitingUser = socket.id;
-            socket.emit("waiting");
-
-        }
-
-    });
+        waitingUser = null;
+    } else {
+        waitingUser = socket;
+        socket.emit("message", "Waiting for stranger...");
+    }
 
     socket.on("message", (msg) => {
-
-        const partner = activeChats[socket.id];
-
-        if (partner) {
-            io.to(partner).emit("message", msg);
+        if (socket.partner) {
+            socket.partner.emit("message", msg);
         }
-
     });
 
     socket.on("disconnect", () => {
 
-        const partner = activeChats[socket.id];
-
-        if (partner) {
-
-            io.to(partner).emit("disconnected");
-
-            delete activeChats[partner];
-            delete activeChats[socket.id];
-
+        if (socket.partner) {
+            socket.partner.emit("message", "Stranger disconnected");
+            socket.partner.partner = null;
         }
 
-        if (waitingUser === socket.id) {
+        if (waitingUser === socket) {
             waitingUser = null;
         }
 
         console.log("User disconnected:", socket.id);
-
     });
 
 });
 
-app.get("/", (req, res) => {
-    res.send("Backend running successfully");
-});
-
-server.listen(PORT, () => {
-    console.log("Server running on port " + PORT);
+server.listen(3000, () => {
+    console.log("Backend running successfully");
 });
