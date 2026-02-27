@@ -8,7 +8,6 @@ app.use(express.static(__dirname));
 let waitingUser = null;
 
 io.on("connection", (socket) => {
-
     console.log("User connected:", socket.id);
 
     if (waitingUser) {
@@ -32,7 +31,6 @@ io.on("connection", (socket) => {
     });
 
     socket.on("disconnect", () => {
-
         if (socket.partner) {
             socket.partner.emit("message", "Stranger disconnected");
             socket.partner.partner = null;
@@ -44,9 +42,10 @@ io.on("connection", (socket) => {
 
         console.log("User disconnected:", socket.id);
     });
-
 });
 
-server.listen(3000, () => {
-    console.log("Backend running successfully");
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, () => {
+    console.log("Server running on port " + PORT);
 });
