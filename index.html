@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Random Chat</title>
+    <style>
+        body {
+            font-family: Arial;
+            text-align: center;
+            background: #0f172a;
+            color: white;
+        }
+
+        #chat {
+            width: 400px;
+            margin: auto;
+            margin-top: 50px;
+        }
+
+        #messages {
+            border: 1px solid gray;
+            height: 300px;
+            overflow-y: scroll;
+            padding: 10px;
+            background: black;
+        }
+
+        input {
+            width: 70%;
+            padding: 10px;
+        }
+
+        button {
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Random Chat</h1>
+
+<button onclick="startChat()">Start</button>
+<button onclick="nextChat()">Next</button>
+
+<div id="chat">
+    <div id="messages"></div>
+
+    <input id="msg" placeholder="Type message">
+    <button onclick="sendMessage()">Send</button>
+</div>
+
+<script src="http://localhost:3000/socket.io/socket.io.js"></script>
+
+<script>
+
+let socket = io("http://localhost:3000");
+
+socket.on("waiting", () => {
+    addMessage("Waiting for stranger...");
+});
+
+socket.on("matched", () => {
+    addMessage("Connected to stranger!");
+});
+
+socket.on("message", (msg) => {
+    addMessage("Stranger: " + msg);
+});
+
+socket.on("disconnected", () => {
+    addMessage("Stranger disconnected");
+});
+
+function startChat() {
+    socket.emit("start");
+}
+
+function nextChat() {
+    socket.emit("start");
+}
+
+function sendMessage() {
+
+    let input = document.getElementById("msg");
+    let msg = input.value;
+
+    if(msg.trim() === "") return;
+
+    addMessage("You: " + msg);
+
+    socket.emit("message", msg);
+
+    input.value = "";
+
+}
+
+function addMessage(msg) {
+
+    let div = document.getElementById("messages");
+
+    div.innerHTML += "<div>" + msg + "</div>";
+
+}
+
+</script>
+
+</body>
+</html>
