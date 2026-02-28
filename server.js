@@ -1,61 +1,76 @@
 const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const cors = require("cors");
+
 const app = express();
-const server = require("http").createServer(app);
-const io = require("socket.io")(server);
+app.use(cors());
 
-app.use(express.static(__dirname));
+// Root route
+app.get("/", (req, res) => {
+  res.send("Random Chat Backend is Running Successfully");
+});
 
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+  },
+});
+
+// Waiting user queue
 let waitingUser = null;
 
 io.on("connection", (socket) => {
-    console.log("User connected:", socket.id);
 
-    if (waitingUser) {
-        // Match two users
-        socket.partner = waitingUser;
-        waitingUser.partner = socket;
+  console.log("User connected:", socket.id);
 
-        socket.emit("message", "Stranger connected");
-        waitingUser.emit("message", "Stranger connected");
+  // User wants to find chat
+  socket.on("find", () => {
 
-        waitingUser = null;
+    if (waitingUser === null) {
+      waitingUser = socket;
+      socket.emit("waiting");
     } else {
-        waitingUser = socket;
-        socket.emit("message", "Waiting for stranger...");
+      // Match users
+      socket.partner = waitingUser;
+      waitingUser.partner = socket;
+
+      socket.emit("matched");
+      waitingUser.emit("matched");
+
+      waitingUser = null;
     }
 
-    socket.on("message", (msg) => {
-        if (socket.partner) {
-            socket.partner.emit("message", msg);
-        }
-    });
+  });
 
-    socket.on("disconnect", () => {
-        if (socket.partner) {
-            socket.partner.emit("message", "Stranger disconnected");
-            socket.partner.partner = null;
-        }
+  // Receive message
+  socket.on("message", (msg) => {
+    if (socket.partner) {
+      socket.partner.emit("message", msg);
+    }
+  });
 
-        if (waitingUser === socket) {
-            waitingUser = null;
-        }
+  // Disconnect handling
+  socket.on("disconnect", () => {
 
-        console.log("User disconnected:", socket.id);
-    });
+    if (socket.partner) {
+      socket.partner.emit("partner-disconnected");
+      socket.partner.partner = null;
+    }
+
+    if (waitingUser === socket) {
+      waitingUser = null;
+    }
+
+    console.log("User disconnected:", socket.id);
+  });
+
 });
 
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
   console.log("Server running on port " + PORT);
-});
-
-// Root route for health check
-app.get("/", (req, res) => {
-  res.send("Random Chat Backend is Running Successfully");
-});
-
-// Test route
-app.get("/test", (req, res) => {
-  res.send("Test route working");
 });
