@@ -1,76 +1,70 @@
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
-const cors = require("cors");
 
 const app = express();
-app.use(cors());
-
-// Root route
-app.get("/", (req, res) => {
-  res.send("Random Chat Backend is Running Successfully");
-});
-
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-  },
+    cors: {
+        origin: "*"
+    }
 });
 
-// Waiting user queue
 let waitingUser = null;
 
-io.on("connection", (socket) => {
+io.on("connection", socket => {
 
-  console.log("User connected:", socket.id);
+    console.log("User connected:", socket.id);
 
-  // User wants to find chat
-  socket.on("find", () => {
+    if (waitingUser) {
 
-    if (waitingUser === null) {
-      waitingUser = socket;
-      socket.emit("waiting");
+        const room = waitingUser.id + "#" + socket.id;
+
+        socket.join(room);
+        waitingUser.join(room);
+
+        socket.room = room;
+        waitingUser.room = room;
+
+        io.to(room).emit("ready");
+
+        waitingUser = null;
+
     } else {
-      // Match users
-      socket.partner = waitingUser;
-      waitingUser.partner = socket;
 
-      socket.emit("matched");
-      waitingUser.emit("matched");
+        waitingUser = socket;
 
-      waitingUser = null;
     }
 
-  });
+    socket.on("offer", offer => {
+        socket.to(socket.room).emit("offer", offer);
+    });
 
-  // Receive message
-  socket.on("message", (msg) => {
-    if (socket.partner) {
-      socket.partner.emit("message", msg);
-    }
-  });
+    socket.on("answer", answer => {
+        socket.to(socket.room).emit("answer", answer);
+    });
 
-  // Disconnect handling
-  socket.on("disconnect", () => {
+    socket.on("candidate", candidate => {
+        socket.to(socket.room).emit("candidate", candidate);
+    });
 
-    if (socket.partner) {
-      socket.partner.emit("partner-disconnected");
-      socket.partner.partner = null;
-    }
+    socket.on("disconnect", () => {
 
-    if (waitingUser === socket) {
-      waitingUser = null;
-    }
+        if (waitingUser === socket) {
+            waitingUser = null;
+        }
 
-    console.log("User disconnected:", socket.id);
-  });
+        socket.to(socket.room).emit("disconnect");
+
+    });
 
 });
 
-const PORT = process.env.PORT || 3000;
+app.get("/", (req, res) => {
+    res.send("Backend running");
+});
 
-server.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
+server.listen(process.env.PORT || 3000, () => {
+    console.log("Server started");
 });
